@@ -1,0 +1,32 @@
+{
+    "name": "siteqa/test",
+    "description": "Package containing tests used by SiteQA",
+    "type": "library",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Michał Hepner",
+            "email": "michal.hepner@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.2",
+        "league/uri": "^5.3",
+        "guzzlehttp/guzzle": "^6.3",
+        "symfony/dom-crawler": "~3.4|~4.0",
+        "symfony/css-selector": "~3.4|~4.0",
+        "psr/log": "^1.0",
+        "psr/http-message": "^1.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^7.2"
+    },
+    "suggest": {
+        "symfony/event-dispatcher": "To make use of Siteqa\\App\\Test\\Event\\SymfonyEventDispatcher (~3.4|~4.0)"
+    },
+    "autoload": {
+        "psr-4": {
+            "Siteqa\\App\\Test\\": "src/"
+        }
+    }
+}
