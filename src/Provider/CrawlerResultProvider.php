@@ -14,11 +14,14 @@ use Siteqa\Test\Domain\Collection\UriCollection;
 use Siteqa\Test\Domain\Model\CrawlerResult;
 use Siteqa\Test\Domain\Model\HttpSuite;
 use Siteqa\Test\Domain\Model\Uri;
+use Siteqa\Test\Event\CrawlerUriQueuedEvent;
+use Siteqa\Test\Event\EventDispatcherAwareInterface;
+use Siteqa\Test\Event\EventDispatcherAwareTrait;
 use Symfony\Component\DomCrawler\Crawler;
 
-class CrawlerResultProvider implements LoggerAwareInterface
+class CrawlerResultProvider implements LoggerAwareInterface, EventDispatcherAwareInterface
 {
-    use LoggerAwareTrait;
+    use LoggerAwareTrait, EventDispatcherAwareTrait;
 
     /**
      * @var HttpSuiteProviderInterface
@@ -95,6 +98,10 @@ class CrawlerResultProvider implements LoggerAwareInterface
             return true;
         });
 
+        foreach ($pending as $uri) {
+            $this->dispatch(new CrawlerUriQueuedEvent($uri));
+        }
+
         $running = new UriCollection();
         $finished = new UriCollection();
 
@@ -115,11 +122,13 @@ class CrawlerResultProvider implements LoggerAwareInterface
                 foreach ($this->getResponseUris($suite, $allowedHosts) as $uri) {
                     $uriString = $uri->__toString();
 
-                    !$pending->hasString($uriString, $flags) &&
-                    !$running->hasString($uriString, $flags) &&
-                    !$finished->hasString($uriString, $flags) &&
-                    in_array($uri->getHost(), $allowedHosts, true) &&
-                    $pending->push($uri);
+                    if (!$pending->hasString($uriString, $flags) &&
+                        !$running->hasString($uriString, $flags) &&
+                        !$finished->hasString($uriString, $flags) &&
+                        in_array($uri->getHost(), $allowedHosts, true)) {
+                        $this->dispatch(new CrawlerUriQueuedEvent($uri));
+                        $pending->push($uri);
+                    }
                 }
             }
         };
@@ -228,25 +237,34 @@ class CrawlerResultProvider implements LoggerAwareInterface
             try {
                 $crawler->filter('*')->each(function (Crawler $node) use ($uriCollection, $httpSuite, $allowedHosts) {
                     if ($node->nodeName() === 'a' && ($href = trim((string) $node->attr('href'))) !== '') {
-                        $hrefUri = Uri::createFromString($href);
-                        $redirects = $httpSuite->getRedirects();
-                        $request = $httpSuite->getRequest();
-                        $lastHost = $redirects->isEmpty() ? $request->getUri()->getHost() : $redirects->last()->getTo()->getUri()->getHost();
 
-                        !$hrefUri->hasHost() && $hrefUri = $hrefUri->withHost($lastHost);
-                        trim((string) $hrefUri->getScheme()) === '' && $hrefUri = $hrefUri->withScheme($request->getUri()->getScheme());
+                        $hrefUri = null;
 
-                        if (!in_array($hrefUri->getHost(), $allowedHosts)) {
-                            return;
+                        try {
+                            $hrefUri = Uri::createFromString($href);
+                        } catch (Exception $exception) {
                         }
 
-                        foreach ($this->uriFilters as $uriFilter) {
-                            if ($uriFilter($hrefUri) === false) {
+                        if ($hrefUri !== null && in_array(trim((string) $hrefUri->getScheme()), ['', 'http', 'https'], true)) {
+                            $redirects = $httpSuite->getRedirects();
+                            $request = $httpSuite->getRequest();
+                            $lastHost = $redirects->isEmpty() ? $request->getUri()->getHost() : $redirects->last()->getTo()->getUri()->getHost();
+
+                            !$hrefUri->hasHost() && $hrefUri = $hrefUri->withHost($lastHost);
+                            trim((string) $hrefUri->getScheme()) === '' && $hrefUri = $hrefUri->withScheme($request->getUri()->getScheme());
+
+                            if (!in_array($hrefUri->getHost(), $allowedHosts)) {
                                 return;
                             }
-                        }
 
-                        $uriCollection->add($hrefUri);
+                            foreach ($this->uriFilters as $uriFilter) {
+                                if ($uriFilter($hrefUri) === false) {
+                                    return;
+                                }
+                            }
+
+                            $uriCollection->add($hrefUri);
+                        }
                     }
                 });
             } catch (Exception $exception) {
