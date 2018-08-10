@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Siteqa\Test\Provider;
 
+use Exception;
 use GuzzleHttp\Promise\EachPromise;
 use InvalidArgumentException;
 use Psr\Log\LoggerAwareInterface;
@@ -224,28 +225,32 @@ class CrawlerResultProvider implements LoggerAwareInterface
 
         if ($httpSuite->hasResponse()) {
             $crawler = new Crawler($httpSuite->getResponse()->getBody());
-            $crawler->filter('*')->each(function (Crawler $node) use ($uriCollection, $httpSuite, $allowedHosts) {
-                if ($node->nodeName() === 'a' && ($href = trim((string) $node->attr('href'))) !== '') {
-                    $hrefUri = Uri::createFromString($href);
-                    $redirects = $httpSuite->getRedirects();
-                    $request = $httpSuite->getRequest();
-                    $lastHost = $redirects->isEmpty() ? $request->getUri()->getHost() : $redirects->last()->getTo()->getUri()->getHost();
+            try {
+                $crawler->filter('*')->each(function (Crawler $node) use ($uriCollection, $httpSuite, $allowedHosts) {
+                    if ($node->nodeName() === 'a' && ($href = trim((string) $node->attr('href'))) !== '') {
+                        $hrefUri = Uri::createFromString($href);
+                        $redirects = $httpSuite->getRedirects();
+                        $request = $httpSuite->getRequest();
+                        $lastHost = $redirects->isEmpty() ? $request->getUri()->getHost() : $redirects->last()->getTo()->getUri()->getHost();
 
-                    !$hrefUri->hasHost() && $hrefUri = $hrefUri->withHost($lastHost);
+                        !$hrefUri->hasHost() && $hrefUri = $hrefUri->withHost($lastHost);
+                        trim((string) $hrefUri->getScheme()) === '' && $hrefUri = $hrefUri->withScheme($request->getUri()->getScheme());
 
-                    if (!in_array($hrefUri->getHost(), $allowedHosts)) {
-                        return;
-                    }
-
-                    foreach ($this->uriFilters as $uriFilter) {
-                        if ($uriFilter($hrefUri) === false) {
+                        if (!in_array($hrefUri->getHost(), $allowedHosts)) {
                             return;
                         }
-                    }
 
-                    $uriCollection->add($hrefUri);
-                }
-            });
+                        foreach ($this->uriFilters as $uriFilter) {
+                            if ($uriFilter($hrefUri) === false) {
+                                return;
+                            }
+                        }
+
+                        $uriCollection->add($hrefUri);
+                    }
+                });
+            } catch (Exception $exception) {
+            }
         }
 
         return $uriCollection;
