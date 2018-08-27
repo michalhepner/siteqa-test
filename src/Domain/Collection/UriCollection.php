@@ -195,7 +195,7 @@ class UriCollection implements IteratorAggregate, Countable
 
         /** @var Uri $item */
         foreach ($this->items as $item) {
-            $rawUri = $caseInsensitive ? strtolower($item->__toString()) : $item->__toString();
+            $rawUri = $caseInsensitive ? strtolower(rawurldecode($item->__toString())) : rawurldecode($item->__toString());
 
             if (!array_key_exists($rawUri, $existingRaw)) {
                 $existingRaw[$rawUri] = $item;
