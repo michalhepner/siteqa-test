@@ -251,6 +251,10 @@ class CrawlerResultProvider implements LoggerAwareInterface, EventDispatcherAwar
                             $lastHost = $redirects->isEmpty() ? $request->getUri()->getHost() : $redirects->last()->getTo()->getUri()->getHost();
 
                             !$hrefUri->hasHost() && $hrefUri = $hrefUri->withHost($lastHost);
+                            if ((string) $httpSuite->getUri()->getUserInfo() !== '') {
+                                $hrefUri = $hrefUri->withUserInfo($httpSuite->getUri()->getUser(), $httpSuite->getUri()->getPass());
+                            }
+
                             trim((string) $hrefUri->getScheme()) === '' && $hrefUri = $hrefUri->withScheme($request->getUri()->getScheme());
 
                             if (!in_array($hrefUri->getHost(), $allowedHosts)) {
